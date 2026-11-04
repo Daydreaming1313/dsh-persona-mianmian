@@ -1,0 +1,86 @@
+{
+  "name": "dsh-persona-mianmian",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 人格插件：绵绵——会饿、会困、会来例假、会因为被缠烦而变冷的暧昧对象。随机性由日程、周期与注意力状态驱动，而不是随机换台词。",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./engine": {
+      "types": "./lib/engine.d.ts",
+      "default": "./lib/engine.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./persona/default.md": "./persona/default.md",
+    "./manifest.json": "./manifest.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src",
+    "persona",
+    "examples",
+    "docs",
+    "tests/cases.yaml",
+    "tests/run.sh",
+    "tests/unit.test.mjs",
+    "tests/integration.mjs",
+    "tests/verify-dsh.mjs",
+    "scripts/release.mjs",
+    "manifest.json",
+    "cordis.patch.yml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "bash tests/run.sh",
+    "verify:dsh": "node tests/verify-dsh.mjs",
+    "pack": "npm pack",
+    "release": "node scripts/release.mjs"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.1-rc.2"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "persona",
+    "roleplay",
+    "wechat-style",
+    "mianmian"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Daydreaming1313/dsh-persona-mianmian.git"
+  },
+  "homepage": "https://github.com/Daydreaming1313/dsh-persona-mianmian#readme",
+  "bugs": {
+    "url": "https://github.com/Daydreaming1313/dsh-persona-mianmian/issues"
+  },
+  "author": "Daydreaming1313",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.9.2"
+  }
+}

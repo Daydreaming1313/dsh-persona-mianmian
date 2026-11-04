@@ -1,0 +1,40 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org/'
+
+      # 集成测试需要本机 dsh 安装，CI 上只跑不依赖 dsh 的单元评测。
+      # 完整链路 `bash tests/run.sh` 请在装有 dsh 的机器上跑。
+      - name: Install
+        run: npm ci --ignore-scripts
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit eval (T-01..T-18)
+        run: node --test tests/unit.test.mjs
+
+      - name: Verify package contents
+        run: npm pack --dry-run --json
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

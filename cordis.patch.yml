@@ -1,0 +1,21 @@
+# dsh-persona-mianmian bundle patch layer.
+# 真实安装入口：package.json -> dsh.bundle.patch -> 本文件。
+# `- insert` 把插件行插进 profile 的 Cordis 配置树；后续 profile 层可整行覆盖 config。
+- insert:
+    - id: mianmian
+      name: dsh-persona-mianmian
+      config:
+        # persona-only 只注入人设与运行时段；persona-with-tools 额外保留完整工具提示。
+        mode: persona-only
+        # text | image | emoji | voice
+        channel: text
+        # 21-35，默认 28
+        cycleLength: 28
+        # 固定随机数种子，便于回归；留空则每轮真随机
+        seed: null
+        # 双向分享基础概率
+        baseShareChance: 0.45
+        # 监听 persona/ 目录，改 md 即生效
+        hotReload: true
+        # 是否尝试注册 /role 别名（宿主已有同名命令时会自动跳过）
+        enableRoleAlias: false

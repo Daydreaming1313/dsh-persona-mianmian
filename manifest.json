@@ -1,0 +1,25 @@
+{
+  "schema": "dsh-persona-mianmian/manifest/v1",
+  "name": "dsh-persona-mianmian",
+  "version": "0.1.0",
+  "entry": "./lib/index.js",
+  "bundle": "./cordis.patch.yml",
+  "permissions": [
+    "state:read",
+    "state:write",
+    "fs:watch:persona"
+  ],
+  "network": false,
+  "shell": false,
+  "modes": [
+    "persona-only",
+    "persona-with-tools"
+  ],
+  "defaultMode": "persona-only",
+  "verifiedAgainst": {
+    "dsh": "0.2.1-rc.2",
+    "node": "22.22.2",
+    "cordis": "4.0.5"
+  },
+  "note": "DSH 不读取本文件。真实安装由 package.json 的 dsh.bundle.patch 与 cordis.patch.yml 驱动；本文件是给人和审计脚本看的自描述清单。"
+}
