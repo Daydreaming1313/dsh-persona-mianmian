@@ -136,4 +136,4 @@ git push -u origin main --tags     # GitHub
 npm publish                        # npm（需 npm login）
 ```
 
-也可以给 `v0.1.0` 打 tag 后由 `.github/workflows/publish.yml` 用 `NPM_TOKEN` secret 自动发布。请把仓库 topic 设为 `dsh-plugin`。
+也可以给 `vX.Y.Z` 打 tag 后由 `.github/workflows/publish.yml` 用 `NPM_TOKEN` secret 自动发布。请把仓库 topic 设为 `dsh-plugin`。

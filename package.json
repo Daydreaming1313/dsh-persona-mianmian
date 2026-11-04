@@ -1,6 +1,6 @@
 {
   "name": "dsh-persona-mianmian",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DeepSeek Harness 人格插件：绵绵——会饿、会困、会来例假、会因为被缠烦而变冷的暧昧对象。随机性由日程、周期与注意力状态驱动，而不是随机换台词。",
   "type": "module",
   "main": "./lib/index.js",

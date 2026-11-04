@@ -120,14 +120,20 @@ export function loadState(now: Date, config: MianmianConfig, rng: () => number =
   }
 }
 
-/** 跨会话按真实日期推进 cycleDay，绝不归零。 */
+/**
+ * 周期天数完全由「周期第 1 天的锚点」与今天推导，天然幂等。
+ *
+ * 早期实现把 cycleAnchor 当成「上次记录日」做增量累加，并把 anchor 推到今天；
+ * 但 defaultState 里 anchor 的语义是周期起点（today - (cycleDay - 1) 天），
+ * 于是每次 loadState / 每轮 evaluate 都会重复计入 (cycleDay - 1) 天，
+ * 重启后相位凭空跳好几天。这里改为只读推导，绝不改写 anchor。
+ */
 export function advanceCycleDay(state: MianmianState, now: Date, timeZone: string): void {
   const today = localMidnight(now, timeZone)
-  const elapsed = Math.floor((today - state.cycleAnchor) / 86400000)
-  if (!Number.isFinite(elapsed) || elapsed <= 0) return
+  const days = Math.floor((today - state.cycleAnchor) / 86400000)
+  if (!Number.isFinite(days) || !Number.isFinite(state.cycleAnchor)) return
   const length = normalizeCycleLength(state.cycleLength)
-  state.cycleDay = ((state.cycleDay - 1 + elapsed) % length + length) % length + 1
-  state.cycleAnchor += elapsed * 86400000
+  state.cycleDay = ((days % length) + length) % length + 1
   state.phase = phaseOf(state.cycleDay, length)
 }
 

@@ -375,6 +375,41 @@ test('judge 启发式项已标注且默认关闭', () => {
   assert.ok(CASES.judgeHeuristic.every((j) => j.enabled === false))
 })
 
+test('回归：周期锚点重载幂等，重启不漂移', () => {
+  const now = shanghai(20)
+  const dir = join(TMP, `cycle-anchor-${Math.random().toString(36).slice(2)}`)
+  const config = { ...defaultConfig(), stateDir: dir }
+  const first = loadState(now, config, seededRng(1))
+  const baseline = {
+    cycleDay: first.cycleDay,
+    cycleAnchor: first.cycleAnchor,
+    phase: first.phase,
+  }
+  saveState(first, config)
+
+  // 同一时刻连续重载任意次，周期状态必须逐位一致（旧实现会每次多推 cycleDay-1 天）
+  for (const seed of [2, 77, 9999, 123456]) {
+    const loaded = loadState(now, config, seededRng(seed))
+    assert.equal(loaded.cycleDay, baseline.cycleDay, '重载改变了 cycleDay')
+    assert.equal(loaded.cycleAnchor, baseline.cycleAnchor, '重载改写了 cycleAnchor')
+    assert.equal(loaded.phase, baseline.phase, '重载改变了相位')
+  }
+
+  // 每轮对话推进状态后保存，再重载仍不得漂移
+  const state = loadState(now, config, seededRng(3))
+  evaluate({ state, userText: '今天下班挺早', now, config, rng: seededRng(3) })
+  saveState(state, config)
+  const afterTurn = loadState(now, config, seededRng(4))
+  assert.equal(afterTurn.cycleDay, state.cycleDay, '一轮对话后重载漂移')
+  assert.equal(afterTurn.cycleAnchor, state.cycleAnchor)
+
+  // 跨一天只推进一天
+  const tomorrow = shanghai(20, 0, 5)
+  const nextDay = loadState(tomorrow, config, seededRng(5))
+  assert.equal(nextDay.cycleDay, (baseline.cycleDay % 28) + 1, '跨日推进不是恰好一天')
+  assert.equal(nextDay.cycleAnchor, baseline.cycleAnchor, '跨日不应改写周期起点')
+})
+
 test.after(() => {
   try { rmSync(TMP, { recursive: true, force: true }) } catch { /* 临时目录清理失败不影响结果 */ }
 })
