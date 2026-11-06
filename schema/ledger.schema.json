@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Daydreaming1313/dsh-persona-mianmian/schema/ledger.schema.json",
+  "title": "台账条目 (Fact)",
+  "description": "只增不改。改口时新增一条，supersedes 指向旧条目 id，reason 必填。",
+  "type": "object",
+  "required": ["id", "kind", "text", "speaker", "turn", "at", "confidence"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
+    "kind": { "enum": ["food", "place", "time", "person", "item", "pref", "event"] },
+    "text": { "type": "string", "minLength": 1, "maxLength": 80, "description": "原文，注入 system prompt 时逐字照搬，不做二次概括" },
+    "speaker": { "enum": ["him", "her"] },
+    "turn": { "type": "integer", "minimum": 0 },
+    "at": { "type": "string", "format": "date-time" },
+    "validUntil": { "type": ["string", "null"], "format": "date-time", "description": "到期自动降权（confidence 压到 0.5），不删除" },
+    "supersedes": { "type": ["string", "null"], "description": "改口时指向旧条目 id" },
+    "reason": { "type": ["string", "null"], "description": "改口必填，如「起晚了摊子收了」" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "<0.6 只做模糊提示，不进锚点块" },
+    "importance": { "type": "number", "minimum": 0, "maximum": 1, "description": "参与 (近因×0.6 + 重要性×0.4) 排序" }
+  },
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": { "properties": { "supersedes": { "type": "string" } }, "required": ["supersedes"] },
+      "then": { "properties": { "reason": { "type": "string", "minLength": 1 } }, "required": ["reason"] }
+    }
+  ]
+}

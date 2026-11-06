@@ -1,7 +1,7 @@
 {
   "name": "dsh-persona-mianmian",
-  "version": "0.1.1",
-  "description": "DeepSeek Harness 人格插件：绵绵——会饿、会困、会来例假、会因为被缠烦而变冷的暧昧对象。随机性由日程、周期与注意力状态驱动，而不是随机换台词。",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness 人格插件：林绵——24 岁济南女生，会饿会累会记仇的暧昧对象。v3 记忆锚定架构：三层记忆 + 事实台账每轮原文重注入 + 关系状态机 + 长度自适应 + 分级降级防漂移。",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -11,11 +11,17 @@
       "default": "./lib/index.js"
     },
     "./engine": {
-      "types": "./lib/engine.d.ts",
-      "default": "./lib/engine.js"
+      "types": "./lib/v1/engine.d.ts",
+      "default": "./lib/v1/engine.js"
+    },
+    "./v1": {
+      "types": "./lib/v1/legacy.d.ts",
+      "default": "./lib/v1/legacy.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./persona/default.md": "./persona/default.md",
+    "./persona/core.md": "./persona/core.md",
+    "./schema/state.schema.json": "./schema/state.schema.json",
+    "./schema/ledger.schema.json": "./schema/ledger.schema.json",
     "./manifest.json": "./manifest.json",
     "./package.json": "./package.json"
   },
@@ -23,6 +29,8 @@
     "lib",
     "src",
     "persona",
+    "schema",
+    "fixtures",
     "examples",
     "docs",
     "tests/cases.yaml",
@@ -30,6 +38,9 @@
     "tests/unit.test.mjs",
     "tests/integration.mjs",
     "tests/verify-dsh.mjs",
+    "tests/*.test.ts",
+    "tests/eval/cases.json",
+    "tests/eval/judge.ts",
     "scripts/release.mjs",
     "manifest.json",
     "cordis.patch.yml",
@@ -57,7 +68,9 @@
     "persona",
     "roleplay",
     "wechat-style",
-    "mianmian"
+    "mianmian",
+    "memory-anchoring",
+    "fact-ledger"
   ],
   "repository": {
     "type": "git",

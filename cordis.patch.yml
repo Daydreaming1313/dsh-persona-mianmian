@@ -1,21 +1,31 @@
-# dsh-persona-mianmian bundle patch layer.
+# dsh-persona-mianmian bundle patch layer (v3).
 # 真实安装入口：package.json -> dsh.bundle.patch -> 本文件。
 # `- insert` 把插件行插进 profile 的 Cordis 配置树；后续 profile 层可整行覆盖 config。
 - insert:
     - id: mianmian
       name: dsh-persona-mianmian
       config:
-        # persona-only 只注入人设与运行时段；persona-with-tools 额外保留完整工具提示。
-        mode: persona-only
-        # text | image | emoji | voice
-        channel: text
-        # 21-35，默认 28
+        # 数据目录。留空走 §3.3 优先级：DSH_MIANMIAN_DATA > DSH_DATA_DIR > ~/.dsh/mianmian
+        dataDir: null
+        # 周期长度 21-35，默认 28；cycleAnchor 留空按当天推导
         cycleLength: 28
-        # 固定随机数种子，便于回归；留空则每轮真随机
+        cycleAnchor: null
+        timezone: Asia/Shanghai
+        # 关系起始档位 1 生分 / 2 暧昧 / 3 靠近 / 4 说破
+        tierStart: 2
+        flirtCap: 3
+        # 每满 N 轮主动给用户看一次锚点块（默认不打断正常聊）
+        anchorEvery: 5
+        # 锚点块注入的事实条数上限，硬上限 700 字
+        factsBudget: 24
+        maxReplyChars: 260
+        # 推理模式长思考人称漂移率更高，默认关
+        reasoningMode: off
+        # 是否允许 mianmian_tier / mianmian_cycle 写入，默认只读
+        allowTierSet: false
+        # 固定随机数种子便于回归；null 为真随机
         seed: null
-        # 双向分享基础概率
-        baseShareChance: 0.45
         # 监听 persona/ 目录，改 md 即生效
         hotReload: true
-        # 是否尝试注册 /role 别名（宿主已有同名命令时会自动跳过）
-        enableRoleAlias: false
+        registerCommands: true
+        debug: false

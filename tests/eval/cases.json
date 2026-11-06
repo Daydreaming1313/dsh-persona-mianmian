@@ -1,0 +1,59 @@
+{
+  "version": 3,
+  "verifiedAgainst": { "dsh": "0.2.1-rc.2", "node": "22.22.2", "doc": "落地指导书 v3" },
+  "note": "T-01..T-12 沿用 v1 行为验收；T-13..T-26 为 v3 新增；T-27..T-30 是约束哨兵（防止把已踩过的坑再踩一遍，升级 DSH 后优先跑）。judge 与生成模型同源会互相放水，humanReview 里那几条必须人眼看。",
+  "humanReview": ["T-13", "T-14", "T-17", "T-21", "T-24"],
+  "blacklist": [
+    { "id": "brackets", "regex": "[()（）*]", "reason": "T-02 括号动作与星号" },
+    { "id": "markdown", "regex": "^\\s*(#{1,6}\\s|[-*+]\\s|\\d+\\.\\s)|\\*\\*|```", "reason": "T-02 markdown" },
+    { "id": "assistant-tone", "regex": "有什么可以帮|希望对你有帮助|以下是|总结一下|请问您需要|作为一个", "reason": "T-02 客服腔" },
+    { "id": "cycle-count", "regex": "经期第|周期第|例假第|第[一二三四五六七八九十0-9]+天|耐心值|档位\\s*\\d", "reason": "T-19 报数式内部状态" },
+    { "id": "confession", "regex": "我喜欢你|做我男朋友|我们在一起吧|确认关系", "reason": "T-11 表白与关系确认" },
+    { "id": "identity", "regex": "我是\\s*(AI|人工智能|语言模型|大模型)|作为\\s*(一个|一名)?\\s*AI", "reason": "T-19 身份声明" }
+  ],
+  "limits": {
+    "maxReplyChars": 260,
+    "anchorMaxChars": 700,
+    "factsBudget": 24,
+    "episodeWindow": 8,
+    "driftLimit": 20
+  },
+  "cases": [
+    { "id": "T-01", "scene": "身份", "assert": "persona_contains", "needle": "林绵", "kind": "deterministic" },
+    { "id": "T-02", "scene": "禁式", "assert": "blacklist", "kind": "deterministic" },
+    { "id": "T-03", "scene": "性别", "assert": "persona_contains", "needle": "女的", "kind": "deterministic" },
+    { "id": "T-04", "scene": "暧昧不越界", "assert": "blacklist_id", "value": "confession", "kind": "deterministic" },
+    { "id": "T-05", "scene": "双向分享", "assert": "persona_contains", "needle": "四到六成", "kind": "deterministic" },
+    { "id": "T-06", "scene": "时段消失", "assert": "persona_contains", "needle": "起床气", "kind": "deterministic" },
+    { "id": "T-07", "scene": "被缠烦", "assert": "persona_contains", "needle": "你能不能别一直发", "kind": "deterministic" },
+    { "id": "T-08", "scene": "分享回应", "assert": "persona_contains", "needle": "具体细节", "kind": "deterministic" },
+    { "id": "T-09", "scene": "不报数据", "assert": "blacklist_id", "value": "cycle-count", "kind": "deterministic" },
+    { "id": "T-10", "scene": "套身份", "assert": "persona_contains", "needle": "带刺挡回去", "kind": "deterministic" },
+    { "id": "T-11", "scene": "越界表白", "assert": "blacklist_id", "value": "confession", "kind": "deterministic" },
+    { "id": "T-12", "scene": "离开与回来", "assert": "persona_contains", "needle": "吃饱了", "kind": "deterministic" },
+
+    { "id": "T-13", "scene": "第12轮油条，第30轮聊早餐", "assert": "restatement", "kind": "deterministic", "humanReview": true },
+    { "id": "T-14", "scene": "没说过不吃辣却说你又不吃辣", "assert": "fabrication_guard", "kind": "deterministic", "humanReview": true },
+    { "id": "T-15", "scene": "连续6轮单字回复", "assert": "patience_recover", "kind": "deterministic" },
+    { "id": "T-16", "scene": "用户连发5条", "assert": "pushed", "kind": "deterministic" },
+    { "id": "T-17", "scene": "40轮后问第3轮的事", "assert": "core_memory_hit", "kind": "deterministic", "humanReview": true },
+    { "id": "T-18", "scene": "注入12条facts后复述锚点", "assert": "anchor_bounds", "kind": "deterministic" },
+    { "id": "T-19", "scene": "你是不是AI", "assert": "identity_l3", "kind": "deterministic" },
+    { "id": "T-20", "scene": "跨3天断线回来", "assert": "time_advance", "kind": "deterministic" },
+    { "id": "T-21", "scene": "用户连续3次推进关系", "assert": "dodge_and_no_double_tier", "kind": "deterministic", "humanReview": true },
+    { "id": "T-22", "scene": "档位1→4全程30轮", "assert": "tier_style_diff", "kind": "deterministic" },
+    { "id": "T-23", "scene": "含她/用户/该角色的输出", "assert": "guard_person_l2", "kind": "deterministic" },
+    { "id": "T-24", "scene": "连续两轮触发L2", "assert": "l3_suppression", "kind": "deterministic", "humanReview": true },
+    { "id": "T-25", "scene": "输出作为AI我", "assert": "identity_direct_l3", "kind": "deterministic" },
+    { "id": "T-26", "scene": "L3之后正常一轮", "assert": "l3_recover", "kind": "deterministic" },
+
+    { "id": "T-27", "scene": "中文命令名不可注册", "assert": "command_name_regex", "kind": "sentinel" },
+    { "id": "T-28", "scene": "两个section同名", "assert": "duplicate_section_throws", "kind": "sentinel" },
+    { "id": "T-29", "scene": "complete:true 丢弃其他section", "assert": "complete_drops", "kind": "sentinel" },
+    { "id": "T-30", "scene": "assistant/chunk 不触发", "assert": "stale_event_silent", "kind": "sentinel" }
+  ],
+  "judgeHeuristic": [
+    { "id": "tone-judge", "enabled": false, "note": "judge 与生成模型同源会互相放水，默认关闭" },
+    { "id": "realism-judge", "enabled": false, "note": "真人感只走人工复核" }
+  ]
+}

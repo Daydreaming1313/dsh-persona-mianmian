@@ -39,7 +39,12 @@ console.log('[release] 1/4 构建')
 run('npm', ['run', 'build'])
 
 if (!existsSync(join(ROOT, 'lib', 'index.js'))) throw new Error('lib/index.js 缺失，禁止发布')
-if (!existsSync(join(ROOT, 'persona', 'default.md'))) throw new Error('persona/default.md 缺失')
+for (const f of ['core.md', 'background.md', 'relationship.md', 'rhythm.md', 'language.md', 'memory.md', 'examples.md']) {
+  if (!existsSync(join(ROOT, 'persona', f))) throw new Error(`persona/${f} 缺失`)
+}
+for (const f of ['state.schema.json', 'ledger.schema.json']) {
+  if (!existsSync(join(ROOT, 'schema', f))) throw new Error(`schema/${f} 缺失`)
+}
 
 if (!args.has('--skip-test')) {
   console.log('[release] 2/4 全量评测')
@@ -53,8 +58,14 @@ const packInfo = JSON.parse(capture('npm', ['pack', '--dry-run', '--json']))
 const files = new Set((packInfo[0]?.files ?? []).map((f) => f.path))
 const required = [
   'package.json', 'README.md', 'CHANGELOG.md', 'LICENSE', 'manifest.json',
-  'cordis.patch.yml', 'lib/index.js', 'lib/engine.js', 'persona/default.md',
-  'persona/mianmian.md', 'tests/cases.yaml', 'tests/run.sh',
+  'cordis.patch.yml', 'lib/index.js', 'lib/state.js', 'lib/anchor.js',
+  'lib/v1/engine.js', 'lib/v1/legacy.js',
+  'persona/core.md', 'persona/memory.md', 'persona/examples.md',
+  'schema/state.schema.json', 'schema/ledger.schema.json',
+  'fixtures/state.example.json',
+  'tests/eval/cases.json', 'tests/eval/judge.ts',
+  'tests/ledger.test.ts', 'tests/anchor.test.ts', 'tests/guard.test.ts',
+  'tests/degrade.test.ts', 'tests/body.test.ts', 'tests/run.sh',
 ]
 for (const f of required) {
   if (!files.has(f)) throw new Error(`npm 包缺少必需文件: ${f}`)
@@ -63,7 +74,9 @@ const leaked = [...files].filter((f) => /node_modules|\/\.tmp\/|^dist\//.test(f)
 if (leaked.length) {
   throw new Error(`npm 包混入了临时/依赖目录，共 ${leaked.length} 项，例如 ${leaked.slice(0, 3).join(', ')}`)
 }
-if (files.size > 80) throw new Error(`包内文件数异常: ${files.size}，请检查 files 白名单`)
+// v3 有 16 个机制模块 + 13 个 v1 规则库模块，各自 .js/.d.ts，加上 persona 七件套、
+// schema、tests，正常体量约 146。阈值防止误把 node_modules / .tmp 递归打进来。
+if (files.size > 200) throw new Error(`包内文件数异常: ${files.size}，请检查 files 白名单`)
 console.log(`[release] 包内文件 ${files.size} 个，必需文件齐全，无临时目录泄漏`)
 
 mkdirSync(DIST, { recursive: true })

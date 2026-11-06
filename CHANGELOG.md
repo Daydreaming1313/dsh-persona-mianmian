@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.2.0 — 2026-11-06
+
+**v3 记忆锚定架构**，按《DSH 落地指导书 v3》整份重写。核心变化：从「随机性引擎」升级为「每轮把该记的原文重新塞回她眼前」。
+
+### 新增机制
+
+- **三层记忆**：核心块每轮原文进 system prompt（≤900 字）／情景块滚动 8 轮（≤500 字）／原话库只落 `transcript.jsonl` 不进 prompt。
+- **事实台账四张表**（`facts` / `hisPrefs` / `openItems` / `episodes`）：只增不改；相似度 >0.9 去重；同类冲突 + 理由词 → 合法 `supersedes`，无理由改口记 `drift` 违例。这是「改口必须给理由」在数据层的落点。
+- **锚点块**（`anchor.ts`）：≤700 字硬上限、facts ≤24 条、按 `近因×0.6 + 重要性×0.4` 排序；超长先砍 episodes 再砍低置信事实。顶部常驻 L1 思考期人称约束。
+- **关系状态机**（tier 1–4）：升档需连续 2 轮正向、后退记心结、一场不跨两档、拉扯上限 3 次且间隔 ≥5、三成概率躲；跨档在称呼／主动频率／句长上留痕。
+- **长度自适应**：`base = clamp(12 + 输入字数×0.35, 12, 240)` × 档位 × 状态 × 时段 × 降级系数，硬上限 260 字，作为软目标不截断。
+- **分级降级 L1/L2/L3**：DSH 无法拦截助手输出，守卫改为纯函数只观测；L2 下轮锚点补注入纠偏块，L3 只留固定短句模板，一轮后自动回落。
+- **状态模型 v3**：`version: 3`，`relationship` / `body` / `ledger` / `drift` / `degradeLevel` / `recentUserLen`。内存单例 + 防抖 800ms 原子写 + 退出 flush；启动读到 v1/v2 先备份 `state.v{old}.bak.json` 再迁移（energy/patience 0..1 → 0..100，affection → tier）。
+- **用户侧双通道**：6 个 ASCII 工具（`mianmian_anchor` / `_tier` / `_cycle` / `_export` / `_import` / `_reset`）+ 中文对话关键词（「锚」「复盘」「导出一下」）。
+- `schema/` 两份 JSON Schema、`fixtures/state.example.json`、`persona/` 七件套、`tests/eval/cases.json`（T-01~T-30）与 `judge.ts`。
+
+### 兼容性
+
+- 0.1.x 的随机性引擎整体保留在 `src/v1/`（`lib/v1/`），T-01~T-12 行为验收继续跑，26 项回归断言全绿，未退化。
+- 按文档要求新增 5 个 `.test.ts`（Node 22.22 原生 TS 剥离直接跑，无 ts-node / vitest 依赖），共 60 项断言。
+- 评测扩为 5 步：类型检查 → v3 60 断言 → v1 26 回归 → 真实 Cordis 集成 → `dsh plugin add` / `--dump-config` 安装链路。
+
+### 校准
+
+v3 指导书里新写的事件名、`inject`、`order` 数值、`scope.chatId`、`text:()=>null`、`ctx.on('dispose')`、CJS 模块格式等断言，与真实 `dsh 0.2.1-rc.2` 仍有出入。全部按源码落地，逐条证据见 `docs/CALIBRATION.md` 的「v3 增补」章节。
+
+### 验收抓到并修掉的真问题
+
+- `onUser` 原本没接 `tickBody`，状态机的每轮 tick 根本没跑 —— 已接入真实连发时间戳。
+- 工具注册的 disposer 只收集未挂 `ctx.effect`，卸载后工具残留 —— 已按 `dsh-defend` 官方写法包进 `ctx.effect`。
+- 首次启动不落 `state.json`，用户「刚装好想手填台账」时文件不存在 —— 已改为首次启动即写。
+- 拉扯「躲开」时未记录尝试轮次，导致间隔 ≥5 的硬规则形同虚设 —— `lastFlirtTurn` 改为记录上次尝试。
+- 人称守卫对「她说她今天不来了」这类合法转述误判 —— 改用搭配词区分第三方引用与自称崩坏。
+
 ## 0.1.1 — 2026-11-04
 
 修复版。安装到真实 DSH 环境后做运行时验收时发现并修掉一个长期一致性缺陷。

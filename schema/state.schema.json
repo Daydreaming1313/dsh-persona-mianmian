@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Daydreaming1313/dsh-persona-mianmian/schema/state.schema.json",
+  "title": "dsh-persona-mianmian state.json (v3)",
+  "description": "单机单用户的全部记忆。台账条目只增不改，改口时新增一条并用 supersedes 指向旧条目。",
+  "type": "object",
+  "required": ["version", "userId", "createdAt", "lastTickAt", "relationship", "body", "ledger", "drift", "degradeLevel", "turn", "recentUserLen"],
+  "properties": {
+    "version": { "const": 3, "description": "低于 3 的文件启动时会先备份再迁移" },
+    "userId": { "type": "string", "default": "default" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "lastTickAt": { "type": "string", "format": "date-time" },
+    "relationship": {
+      "type": "object",
+      "required": ["tier", "flirtCount", "lastFlirtTurn", "grudge"],
+      "properties": {
+        "tier": { "type": "integer", "minimum": 1, "maximum": 4, "description": "1 生分 / 2 暧昧 / 3 靠近 / 4 说破" },
+        "flirtCount": { "type": "integer", "minimum": 0, "description": "本场拉扯次数，硬上限由 config.flirtCap 决定" },
+        "lastFlirtTurn": { "type": "integer" },
+        "grudge": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["turn", "what", "resolved"],
+            "properties": {
+              "turn": { "type": "integer", "minimum": 0 },
+              "what": { "type": "string" },
+              "resolved": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "body": {
+      "type": "object",
+      "required": ["hunger", "energy", "patience", "cycle", "lastMealAt"],
+      "properties": {
+        "hunger": { "type": "number", "minimum": 0, "maximum": 100 },
+        "energy": { "type": "number", "minimum": 0, "maximum": 100 },
+        "patience": { "type": "number", "minimum": 0, "maximum": 100 },
+        "cycle": {
+          "type": "object",
+          "required": ["length", "day", "anchor"],
+          "properties": {
+            "length": { "type": "integer", "minimum": 21, "maximum": 35 },
+            "day": { "type": "integer", "minimum": 1, "maximum": 35 },
+            "anchor": { "type": "string", "description": "周期第 1 天的日期 YYYY-MM-DD，只读推导，绝不改写" }
+          }
+        },
+        "lastMealAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ledger": {
+      "type": "object",
+      "required": ["facts", "hisPrefs", "openItems", "episodes"],
+      "properties": {
+        "facts": { "type": "array", "items": { "$ref": "ledger.schema.json" } },
+        "hisPrefs": { "type": "array", "items": { "$ref": "ledger.schema.json" }, "description": "只记他明确说过的偏好" },
+        "openItems": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["what", "sinceTurn", "nudged"],
+            "properties": {
+              "what": { "type": "string" },
+              "sinceTurn": { "type": "integer", "minimum": 0 },
+              "nudged": { "type": "boolean" }
+            }
+          }
+        },
+        "episodes": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "required": ["turn", "at", "summary", "tag"],
+            "properties": {
+              "turn": { "type": "integer", "minimum": 0 },
+              "at": { "type": "string", "format": "date-time" },
+              "summary": { "type": "string" },
+              "tag": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "drift": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["turn", "kind", "at"],
+        "properties": {
+          "turn": { "type": "integer", "minimum": 0 },
+          "kind": { "type": "string" },
+          "at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "degradeLevel": { "type": "integer", "minimum": 0, "maximum": 3, "description": "0 正常 / 1 软纠偏 / 2 锚点补注入 / 3 降级短回复" },
+    "turn": { "type": "integer", "minimum": 0 },
+    "recentUserLen": { "type": "array", "maxItems": 3, "items": { "type": "number", "minimum": 0 } },
+    "runtime": {
+      "type": "object",
+      "description": "不参与校验的派生量，丢失不影响记忆连续性",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

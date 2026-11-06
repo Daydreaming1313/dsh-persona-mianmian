@@ -112,3 +112,131 @@ renderPrompt / renderContextSnapshot 通过；插件卸载后注册项全部撤�
     cycleLength: 28
     ...
 ```
+
+---
+
+# v3 增补：落地指导书 v3 的 API 断言校准
+
+> 来源：《「绵绵」真人化暧昧女友人格插件 · DSH 落地指导书 v3》（§12 自带差异总表）。
+> v3 把 v1/v2 的 `definePlugin` / `ctx.hooks` / `ctx.state` / 中文命令 / 输出重生成等错误全部纠正了，方向正确。
+> 但 v3 **新写的那批 Cordis 事件名和几处 API 细节，经实机核对仍与本机 dsh `0.2.1-rc.2` 不符**。
+> 按 v3 §12 最后一句「以你本机能用的 .d.ts 和 `dsh dump-config` 为准，指南会过时，类型定义和源码不会」，
+> 以下逐条按源码落地。证据路径前缀 `PKG` = `.../dsh/node_modules/@deepseek-ai/`，`PLG` = `~/.dsh/profiles/desktop/node_modules/`。
+
+## V-1. §6.3 事件表：10 个「可用」里只有 2 个真实存在
+
+`PKG/dsh-agent/lib/types/runtime-types.d.ts:212-409` 是 agent 事件的**唯一**声明块（12 个）；
+`PKG/dsh-session/lib/types/index.d.ts:30-70` 是 session 事件的唯一声明块（4 个）。
+`PKG/dsh-tool-cordis/lib/types/api-catalog.js:3929+` 有一份「Every harness event, sorted by name」权威清单可交叉验证。
+
+| v3 §6.3 声称 | 真实 | 证据 |
+|---|---|---|
+| `agent/turn-start` / `agent/turn-end` | **不存在**（精确匹配 0 次） | 一轮「即将结束」是 `agent/turn-stopping`（serial，`runtime-types.d.ts:370-391`）；`turn/end` 是 SessionEvent type |
+| `user/message` / `assistant/message`（作为 Cordis 事件） | **不是事件**，是 `SessionEventMap` 的 type | `PKG/dsh-session/lib/types/types.d.ts:288-295, 321-339`；只走 `session/event`（`index.d.ts:52-61`） |
+| `agent/inbox/inserted` | ✅ 存在，emit | `runtime-types.d.ts:256-266`，payload `{ agent, message: UserMessage }` |
+| `agent/assistant-stream` | ✅ 存在，emit，只读 | `runtime-types.d.ts:357-369`，payload `{ agent, frame }` |
+| `agent/run-error` | **不存在** | 真实为 `agent/error` / `agent/request-error` |
+| `command/registered` | **不存在** | 真实为 `commands/change`（`PKG/dsh-commands/lib/types/types.d.ts:78-87`） |
+| `ready` / `dispose` | **都不是事件** | `PKG/cordis/lib/types/events.d.ts:208-239` 只有 `internal/*`；全树 `on('dispose')` / `on('ready')` 0 命中 |
+
+`PLG/dsh-fish-memory/lib/index.js:3655-3658` 有一段踩坑实录，逐字印证：
+
+```js
+// ⚠⚠ 事件名踩过的坑：DSH 里**没有** `user/message` / `assistant/message` 这两个 Cordis 事件 ✗
+//   `user/message` / `assistant/message` 是 **SessionEvent 的 type**（走 `session/event`），
+//   而 agent 作用域上真正能收到的是 `agent/inbox/inserted` 和 `agent/turn-stopping` ✓
+```
+
+**本插件落地**：只订阅 `agent/created`、`agent/inbox/inserted`、`session/event`、`agent/turn-stopping`。
+`user/message` 的文本在 `event.data.content`，`assistant/message` 的文本在 `event.data.message.content`（`bridge.ts` 已分别处理）。
+事件是 Scope-filtered dispatch，必须在 `agent.ctx` 上订阅（`agent/created` 时 attach），全局 ctx 收不到。
+T-30 哨兵专门钉住「老事件名 `assistant/chunk` 静默不触发」。
+
+## V-2. §6.1 `inject: ['systemPrompt','command']` → `commands`（复数）
+
+- `PKG/dsh-commands/lib/index.js:259` `super(ctx, "commands")`；`lib/types/index.d.ts:63-66` 声明 `Context.commands: CommandRuntime`。
+- `dsh --dump-config` 里 `- id: commands / name: '@deepseek-ai/dsh-commands'`。`ctx.command` 全树 0 命中。
+- `PLG/dsh-defend/lib/index.js:697` `const inject = ["commands"]`；`PKG/dsh-command-feedback/lib/index.js:66` 同。
+- **本插件**：`inject` 只声明 `['systemPrompt']`，`commands` / `agents` 用 `ctx.get()` 能力探测（沿用 §1 的 Cordis 代理教训），保证任何 profile 都能装；工具注册用 `ctx.effect(() => commands.register(def))` 保证卸载撤销。
+
+## V-3. §6.1 的 order 数值三处全错，但 0/10/20 仍可用
+
+`PKG/dsh-system-prompt/lib/types/index.d.ts:119-152` 的 `SECTION_ORDERS` 逐字：
+
+```
+HARNESS_IDENTITY: -1000        DEPLOYMENT_PERSONA_PREFIX: 0
+PLAN_POLICY: 500 ... TOOL_BASH: 1000 ... MCP_SERVERS: 3100
+TOOLS_SDK: 5000 ... DEPLOYMENT_PERSONA_SUFFIX: 10200
+```
+
+- v3 说 `-100 = harness 身份基线` → 实为 **-1000**。
+- v3 说 `100–199 = 工具引导` → 100–199 其实是 **`CONTEXT_ORDERS`**（`index.d.ts:155-163`）；工具 section 是 **1000–3100**。
+- `0 = 部署自有 persona` 是对的（`DEPLOYMENT_PERSONA_PREFIX`）。
+
+**本插件**：persona `order: 0`、anchor `10`、degraded `20`。都落在 persona 带，与宿主工具段（1000+）自然共存，实测 sections 顺序为
+`harness:identity, deployment:persona-prefix, mianmian:persona, mianmian:anchor, mianmian:degraded, deployment:persona-suffix`。
+
+## V-4. §6.2 的 L3「section 返回 null」会在渲染阶段抛 TypeError
+
+- 类型 `PromptSection.text: string | ((context: AssembleContext) => string)`（`index.d.ts:46-60`），**没有 null**。
+- `assemble()` 不校验直接存（`PKG/dsh-system-prompt/lib/index.js:385-393`）；`renderPrompt` 的 `interpolate()` 会执行 `text.indexOf("{{")` → `null.indexOf` 抛错；即便 `interpolate:false`，`.filter(text => text.length > 0)` 也会读 `null.length` 抛错（`lib/index.js:117-119, 158-162`）。
+- 正确做法：返回**空串** `''`，`renderPrompt` 的 filter 会丢掉空 section。`PLG/dsh-fish-memory/lib/index.js:3795-3797, 3834-3836` 正是这么写。
+
+**本插件**：L3 时 persona / anchor 返回 `''`，另起 `mianmian:degraded` section 输出固定短句模板。T-24 断言空串与 `renderPrompt` 不炸，集成测试真实挂载验证。
+
+## V-5. §6.4 `scope.chatId` 不存在
+
+- `AssembleContext` 只有 `scope?: ScopeKey` 与 `signal?: AbortSignal`（`index.d.ts:36-45`）；唯一合并扩展字段是 `agent?: Agent`（`PKG/dsh-agent/lib/types/runtime-types.d.ts:14-19`）。
+- `ScopeKey = object`（不透明，`PKG/dsh-scope/lib/types/index.d.ts:10-11`）；运行时 `assembleContextFor(agent)` 直接把 `scope` 设为 agent 本身（`PKG/dsh-agent/lib/index.js:285-297`）。
+
+**本插件**：用 `context.agent?.id` 取会话标识，取不到时回退到桥接槽的最近活跃 key；不依赖任何 `chatId`。
+
+## V-6. §2「不加 type:module，用 CJS」与本机生态相反
+
+- 本机 4 个现成插件全带 `"type": "module"`：`PLG/dsh-defend/package.json:15`、`dsh-context:15`、`dsh-feiyu-mood:7`、`dsh-fish-memory:6`；入口全是 `export const name` / `export function apply`。
+- loader 用原生 ESM `import()`（`PKG/cordis-plugin-loader/lib/index.js:213-227`），靠 `unwrapExports`（`:666-672`）兼容 ESM/CJS 两种形状 —— **CJS 能跑，但不是本机既有实践**。
+- 0.1.x 已用 ESM 跑通 `dsh plugin add` + 真实 Cordis 挂载，没有理由为了照文档改成 CJS。
+
+**本插件**：保持 `"type": "module"`。
+
+## V-7. §6.1 `ctx.on('dispose')` 与 `ctx.on('ready')` 都不存在
+
+- Cordis 的 `ctx.on()` 注册本身就是 fiber effect，卸载时自动移除（`PKG/cordis/src/events.ts:254-259, 277-301`）。
+- 卸载清理推荐 `ctx.effect(() => () => cleanup)`（`fiber.d.ts:41-51, 402-418`）；`PLG/dsh-feiyu-mood/lib/index.js:1386-1397` 是实证。
+
+**本插件**：所有 section / variable / 工具 / 事件都用 `ctx.effect` 包住，最后一个 effect 负责 `persona.dispose()` / `bridge.dispose()` / `store.dispose()`（内含最后 flush）。
+
+## V-8. 两条 v3 写对了的（保留）
+
+- **§8 ASCII 工具名**：`COMMAND_NAME = /^[a-z][a-z0-9_-]*$/u`（`PKG/dsh-commands/lib/index.js:77-78, 148-150`），下划线**合法**，`mianmian_anchor` 可用；中文名会被 `register` 直接抛 TypeError。T-27 哨兵钉住。
+- **§6.1 section.text 支持函数动态求值**：每轮 assemble 重新调用（`index.js:388`），且 `PromptContext.text` 也一样。本插件 anchor 段用函数每轮重算锚点块。
+
+## V-9. 其余落地说明
+
+- **`interpolate: false` 是硬要求**：台账原文可能含 `{{ }}`，默认插值会抛 `unknown prompt variable`。`PLG/dsh-fish-memory/lib/index.js:3772-3777` 有同样注释。本插件三处 section 全设 false。
+- **`section()` 同名同 layer 会 throw**（`PKG/dsh-scope/lib/index.js:27-30`）：统一 `mianmian:` 前缀，T-28 哨兵实测。不同 layer 同名是 shadow 而非 throw，v3 说的「直接 throw」只在同一 layer 成立。
+- **`snapshotEvents()` 存在但已 `@deprecated`**（`PKG/dsh-session/lib/types/index.d.ts:214-224`）：本插件只在 `agent/turn-stopping` 里作为「`session/event` 没挂上时的兜底」调用并做判空，主路径是 `session/event`。
+- **`ctx.storage` 不走**：v3 §3.1 的判断正确 —— 它不是可直接 get/set 的 KV，且领域插件挂载前读 `ctx.storage.domain` 会抛 `form-not-mounted`。本插件用自己的 JSON + 内存单例（§3.2），首次启动即落盘以便人工编辑台账。
+- **没有输出拦截点**：v3 §6.2 的方向正确，`agent/assistant-stream` 是 `@mode emit` 只读，所有 waterfall（`agent/pre-step` / `agent/request` / `system-prompt/assemble`）都不针对助手文本。本插件不订阅任何 waterfall，避免忘 `await next()` 把宿主链短路。
+
+## v3 校准后的验证结果
+
+```
+== 1/5  TypeScript 类型检查 ==                       PASS
+== 2/5  v3 机制测试 T-01..T-30 (.test.ts 原生跑) ==   60 tests / 60 pass / 0 fail
+== 3/5  v1 引擎回归 T-01..T-18 ==                    26 tests / 26 pass / 0 fail
+== 4/5  真实 Cordis + dsh-system-prompt ==            ALL PASS（含 T-24/T-28/T-29/T-30 哨兵实测）
+== 5/5  dsh plugin add / --dump-config ==             ALL PASS
+```
+
+集成实测注册结果：
+
+```
+sections:  harness:identity, deployment:persona-prefix, mianmian:persona,
+           mianmian:anchor, mianmian:degraded, deployment:persona-suffix
+variables: model, mianmian_mood
+tools:     mianmian_anchor, mianmian_tier, mianmian_cycle,
+           mianmian_export, mianmian_import, mianmian_reset
+renderPrompt / renderContextSnapshot 通过；L3 空串段不炸；卸载后全部撤销
+```
+

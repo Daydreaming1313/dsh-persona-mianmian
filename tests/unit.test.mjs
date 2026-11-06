@@ -4,13 +4,13 @@ import { readFileSync, readdirSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { seededRng, defaultConfig } from '../lib/config.js'
-import { defaultState, loadState, saveState } from '../lib/state.js'
-import { phaseOf, phaseLengths } from '../lib/cycle.js'
-import { evaluate, renderRules, sampleReply } from '../lib/engine.js'
-import { matchesLunchInterrupt, MIN_BUSY_MS } from '../lib/leave.js'
-import { extractUserText } from '../lib/index.js'
-import { createPersonaStore } from '../lib/watch.js'
+import { seededRng, defaultConfig } from '../lib/v1/config.js'
+import { defaultState, loadState, saveState } from '../lib/v1/state.js'
+import { phaseOf, phaseLengths } from '../lib/v1/cycle.js'
+import { evaluate, renderRules, sampleReply } from '../lib/v1/engine.js'
+import { matchesLunchInterrupt, MIN_BUSY_MS } from '../lib/v1/leave.js'
+import { extractUserText } from '../lib/v1/legacy.js'
+import { createPersonaStore } from '../lib/v1/watch.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const CASES = JSON.parse(readFileSync(join(ROOT, 'tests', 'cases.yaml'), 'utf8'))

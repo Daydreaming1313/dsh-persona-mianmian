@@ -1,120 +1,158 @@
-/** 共享类型。本插件零运行时依赖，所有类型都在这里自己声明。 */
+/** v3 状态模型与共享类型。零运行时依赖，全部自己声明。 */
 
+export const STATE_VERSION = 3
+
+export type Tier = 1 | 2 | 3 | 4
+export type Phase = 'menstrual' | 'follicular' | 'ovulation' | 'earlyLuteal' | 'lateLuteal'
+export type PatienceBand = 'warm' | 'normal' | 'cool' | 'pushed'
+export type DegradeLevel = 0 | 1 | 2 | 3
+export type FactKind = 'food' | 'place' | 'time' | 'person' | 'item' | 'pref' | 'event'
 export type Channel = 'text' | 'image' | 'emoji' | 'voice'
 export type Mode = 'persona-only' | 'persona-with-tools'
-export type Phase = 'follicular' | 'ovulation' | 'luteal' | 'menstrual'
-export type SlotId =
-  | 'wake' | 'commute' | 'morning' | 'lunch' | 'nap'
-  | 'afternoon' | 'peak' | 'main' | 'sleepy' | 'sleep'
-export type LengthBand = 'short' | 'medium' | 'long' | 'emoji'
-export type Tone = 'warm' | 'cold' | 'flat'
-export type Completeness = 'full' | 'half' | 'jump'
 
-/** 一个真实时间档位（时间按 Asia/Shanghai 的当日本地分钟数比较）。 */
-export interface DaySlot {
-  readonly id: SlotId
-  readonly label: string
-  readonly from: number
-  readonly to: number
-  readonly energyDecay: number
-  readonly delayMs: readonly [number, number]
-  readonly lengthRange: readonly [number, number]
-  readonly leaveChance: number
-  /** 暖 / 冷 / 平 的抽取权重 */
-  readonly toneWeights: readonly [number, number, number]
-  readonly lunchInterrupt: boolean
-  readonly note: string
+/** 台账条目。只增不改；改口时新增一条并用 supersedes 指向旧条目。 */
+export interface Fact {
+  id: string
+  kind: FactKind
+  text: string
+  speaker: 'him' | 'her'
+  turn: number
+  at: string
+  validUntil: string | null
+  supersedes: string | null
+  reason: string | null
+  confidence: number
+  /** 0..1，参与 §5.4 的 (近因×0.6 + 重要性×0.4) 排序 */
+  importance: number
 }
 
-/** 一轮掷骰的结果。 */
-export interface Roll {
-  length: LengthBand
-  completeness: Completeness
-  tone: Tone
-  share: boolean
-  leave: boolean
+export interface OpenItem {
+  what: string
+  sinceTurn: number
+  nudged: boolean
 }
 
-/** 跨会话持久化的状态。所有数值都在 [0, 1] 或明确标注范围。 */
-export interface MianmianState {
-  version: number
-  cycleDay: number
-  cycleLength: number
-  /** 当前周期第 1 天的本地零点时间戳，用于跨会话推进 cycleDay */
-  cycleAnchor: number
+export interface Episode {
+  turn: number
+  at: string
+  summary: string
+  tag: string
+}
+
+export interface Grudge {
+  turn: number
+  what: string
+  resolved: boolean
+}
+
+export interface DriftEntry {
+  turn: number
+  kind: string
+  at: string
+}
+
+export interface Ledger {
+  facts: Fact[]
+  hisPrefs: Fact[]
+  openItems: OpenItem[]
+  episodes: Episode[]
+}
+
+export interface Relationship {
+  tier: Tier
+  flirtCount: number
+  lastFlirtTurn: number
+  grudge: Grudge[]
+}
+
+/** 三项体内状态均为 0..100。 */
+export interface BodyState {
+  hunger: number
   energy: number
   patience: number
-  affection: number
-  turn: number
-  lastUserAt: number
+  cycle: { length: number; day: number; anchor: string }
+  lastMealAt: string
+}
+
+export interface Violation {
+  kind: string
+  detail: string
+}
+
+/** 不落盘的派生量；与 §3.4 的公开字段分开，方便 schema 校验。 */
+export interface RuntimeState {
+  lastUserText: string
+  lastAssistantText: string
+  targetLen: number
+  positiveStreak: number
+  tierStart: Tier
+  l2Streak: number
+  lastL2Turn: number
+  lastAnchorOutputTurn: number
+  violationsThisTurn: Violation[]
+  /** 最近一次 assemble 的会话标识（来自 context.agent?.id），用于桥接槽 */
+  sessionKey: string
+  /** 本轮用户输入字数 */
+  userLen: number
   /** 最近的真实用户消息时间戳，用于「短时间连发」判定 */
   recentUserTimes: number[]
-  /** 归一化后的问题指纹，用于追问判定 */
-  lastQuestion: string
-  questionCount: number
-  pushed: boolean
-  pushedAt: number
-  busyUntil: number
-  busyReason: string
-  returning: boolean
-  channel: Channel
-  phase: Phase
-  slot: SlotId
-  lastLengthBand: LengthBand
-  lastTone: Tone
-  /** 最近两条的长度档与情绪档，用于相邻 3 条硬规则 */
-  recentRolls: Array<{ length: LengthBand; tone: Tone }>
-  /** 最近十轮的情绪档，用于保证一天里暖冷平都会出现 */
-  toneHistory: Tone[]
-  lastShareAt: number
-  shareCount: number
-  teaseCount: number
-  lastTeaseTurn: number
-  lastAnchorTurn: number
-  pendingDirective: string
-  lastUserText: string
-  updatedAt: number
+  /** 连续单字敷衍轮数，用于 pushed「等 3 轮」回血 */
+  terseStreak: number
 }
 
-/** 本轮要注入给模型的运行时指令。 */
-export interface Directive {
+export interface V3State {
+  version: number
+  userId: string
+  createdAt: string
+  lastTickAt: string
+  relationship: Relationship
+  body: BodyState
+  ledger: Ledger
+  drift: DriftEntry[]
+  degradeLevel: DegradeLevel
   turn: number
-  slot: DaySlot
-  phase: Phase
-  roll: Roll
-  shareLine: string
-  leaveLine: string
-  returnLine: string
-  reset: boolean
-  statusQuery: boolean
-  defense: boolean
-  safety: boolean
-  lowMood: boolean
-  tease: boolean
-  typingTrace: boolean
-  repeatLevel: number
-  pushed: boolean
-  busy: boolean
-  text: string
+  /** 最近 3 轮用户输入长度 */
+  recentUserLen: number[]
+  runtime: RuntimeState
 }
 
-/** 插件配置（cordis.patch.yml 的 config 行）。 */
-export interface MianmianConfig {
-  mode: Mode
-  channel: Channel
+export interface MianmianConfigV3 {
+  /** 显式数据目录，最高优先 */
+  dataDir: string | null
   cycleLength: number
-  /** 首次安装时从第几天开始；null 表示由日期推导 */
-  cycleDayStart: number | null
+  /** ISO 日期，周期第 1 天；null 表示按当天推导 */
+  cycleAnchor: string | null
+  timezone: string
+  tierStart: Tier
+  flirtCap: number
+  anchorEvery: number
+  factsBudget: number
+  maxReplyChars: number
+  reasoningMode: 'off' | 'on'
+  /** 是否允许 mianmian_tier / mianmian_cycle 写入，默认只读 */
+  allowTierSet: boolean
   seed: number | null
-  baseShareChance: number
-  timeZone: string
   hotReload: boolean
-  enableRoleAlias: boolean
-  registerCommands: boolean
-  stateDir: string | null
-  personaFile: string | null
   debug: boolean
+  registerCommands: boolean
+  channel: Channel
+  mode: Mode
+  persistDebounceMs: number
 }
 
-/** 可注入的随机源，便于用 seed 做回归。 */
+/** guard/anchor/length 共同消费的只读快照。 */
+export interface Snapshot {
+  state: V3State
+  config: MianmianConfigV3
+  now: Date
+  phase: Phase
+  patienceBand: PatienceBand
+  moodLabel: string
+  targetLen: number
+  /** 当前轮用户原文（桥接槽，取不到为空串） */
+  userText: string
+  /** 本轮应当主动输出锚点块给用户 */
+  showAnchor: boolean
+}
+
 export type Rng = () => number

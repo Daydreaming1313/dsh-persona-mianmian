@@ -1,0 +1,91 @@
+{
+  "version": 3,
+  "userId": "default",
+  "createdAt": "2026-11-05T22:11:00+08:00",
+  "lastTickAt": "2026-11-06T20:31:00+08:00",
+  "relationship": {
+    "tier": 2,
+    "flirtCount": 1,
+    "lastFlirtTurn": 8,
+    "grudge": [
+      { "turn": 14, "what": "他说好周二给我看猫，没兑现", "resolved": false }
+    ]
+  },
+  "body": {
+    "hunger": 65,
+    "energy": 58,
+    "patience": 55,
+    "cycle": { "length": 28, "day": 17, "anchor": "2026-10-21" },
+    "lastMealAt": "2026-11-06T12:40:00+08:00"
+  },
+  "ledger": {
+    "facts": [
+      {
+        "id": "f_0012",
+        "kind": "food",
+        "text": "他说早上想吃油条",
+        "speaker": "him",
+        "turn": 12,
+        "at": "2026-11-06T08:12:00+08:00",
+        "validUntil": null,
+        "supersedes": null,
+        "reason": null,
+        "confidence": 0.9,
+        "importance": 0.65
+      },
+      {
+        "id": "f_0015",
+        "kind": "event",
+        "text": "他周二说要给我看猫",
+        "speaker": "him",
+        "turn": 15,
+        "at": "2026-11-06T08:20:00+08:00",
+        "validUntil": null,
+        "supersedes": null,
+        "reason": null,
+        "confidence": 0.85,
+        "importance": 0.75
+      }
+    ],
+    "hisPrefs": [
+      {
+        "id": "f_0009",
+        "kind": "pref",
+        "text": "他明确说不吃香菜",
+        "speaker": "him",
+        "turn": 9,
+        "at": "2026-11-05T21:40:00+08:00",
+        "validUntil": null,
+        "supersedes": null,
+        "reason": null,
+        "confidence": 0.92,
+        "importance": 0.9
+      }
+    ],
+    "openItems": [
+      { "what": "答应帮他改文案", "sinceTurn": 20, "nudged": false },
+      { "what": "周六看电影时间没定", "sinceTurn": 22, "nudged": false }
+    ],
+    "episodes": [
+      { "turn": 30, "at": "2026-11-06T19:02:00+08:00", "summary": "聊到公司新开的茶饮店，他说还没去过", "tag": "chat" },
+      { "turn": 32, "at": "2026-11-06T19:40:00+08:00", "summary": "他问我是不是 AI，我顶回去了", "tag": "conflict" }
+    ]
+  },
+  "drift": [],
+  "degradeLevel": 0,
+  "turn": 34,
+  "recentUserLen": [12, 8, 24],
+  "runtime": {
+    "lastUserText": "那周六看电影吧",
+    "lastAssistantText": "行啊 几点",
+    "targetLen": 30,
+    "positiveStreak": 0,
+    "tierStart": 2,
+    "l2Streak": 0,
+    "lastL2Turn": -99,
+    "lastAnchorOutputTurn": 30,
+    "violationsThisTurn": [],
+    "sessionKey": "",
+    "userLen": 8
+  }
+}

@@ -1,139 +1,196 @@
-# dsh-persona-mianmian
+# dsh-persona-mianmian · 绵绵（v3 记忆锚定版）
 
-> 一个会饿、会困、会来例假、会因为被缠烦而变冷的暧昧对象人格插件，给 DeepSeek Harness 用。
+DeepSeek Harness（DSH）人格插件。**林绵**，24 岁，济南人，茶饮公司市场岗，缺爱敏感、有脾气有缺点，跟一个男生处于会变动的关系中。
 
-挂载之后，DSH 的对话被改写成「绵绵」——二十多岁的普通女生，在济南，我的暧昧对象。输出**只像手机微信打出来的消息**，没有任何描写性文字。核心卖点不是「设定了一个性格」，而是**她有日程、有身体周期、有注意力上限**：随机性由这些真实约束驱动，不是随机换台词。
+这不是「更会聊的女友机器人」，是一个具体的、会记仇、会失手、会突然不想说话的人。
 
-**验证环境**：dsh `0.2.1-rc.2`、Cordis `4.0.5`、Node `22.22.2`（Windows）。设计文档与真实 API 的差异见 [docs/CALIBRATION.md](docs/CALIBRATION.md)。
+v3 的核心不是「写得更好的提示词」，而是**每轮把该记的原文重新塞回她眼前**。她不需要有记忆，只需要看不见漏。
 
 ---
 
-## 2. 核心机制
+## 1. 这是什么 / 不是什么
 
-| 模块 | 文件 | 做什么 |
+**是**：纯文本 IM 人格插件；三层记忆 + 事实台账；关系状态机；长度随输入量自适应；分级降级防漂移。
+
+**不是**：TTS / 语音 / 图片；外部数据库；多用户隔离；能拦住模型说错话的护栏。
+
+⚠️ **最重要的一条限制**：DSH 没有任何能拦截或改写助手输出的事件。所以「防漂移」只能做到「事后检测 + 下一轮纠偏 + 主动降级」，**做不到「不合格就不发出去」**。详见 §5。
+
+`state.json` 里留了 `userId` 字段，将来要扩多用户再改。
+
+---
+
+## 2. 60 秒上手
+
+```bash
+dsh plugin add dsh-persona-mianmian
+# 或本地安装
+dsh plugin add ./dsh-persona-mianmian
+```
+
+部署面板选「只替换开场白」（或保持默认，人格段会与宿主工具引导共存），开聊。
+
+首次启动会在 `~/.dsh/mianmian/` 生成 `state.json`，可以直接打开手填台账。
+
+对话里直接说「锚」「复盘」「你现在什么档」「导出一下」就行，不用记命令。
+
+---
+
+## 3. 配置项
+
+`cordis.patch.yml` 的 `config` 行（后续 profile 层可整行覆盖）：
+
+| 项 | 默认 | 说明 |
 |---|---|---|
-| 时间分档 | `src/schedule.ts` | 按 Asia/Shanghai 真实时间落入 10 个日档，决定回复延迟、字数区间、离开概率、情绪权重 |
-| 身体周期 | `src/cycle.ts` | 21–35 天可配，四阶段映射；只走行为（乏力、怕冷、想吃东西），**不报天数** |
-| 注意力衰减 | `src/attention.ts` | 每轮 patience / energy 衰减，追问惩罚、连发 ≥5 条进入 pushed、睡眠回血、affection 上限 0.9 |
-| 双向分享 | `src/share.ts` | 我分享日常后至少 40% 的回复带一件她自己的事，只讲一半、留尾巴 |
-| 离开与延迟 | `src/leave.ts` | 午饭 / 犯困 / 晚高峰触发中断，写 `busyUntil`，最短 90 秒后才「回来」 |
-| 掷骰 | `src/roll.ts` | 每轮五步：长度档、完整度、情绪档、分享、离开；相邻 3 条长度与情绪不得完全相同 |
-| 主控 | `src/engine.ts` | 按 schedule → cycle → attention → share → leave → roll 的顺序求值，生成运行时指令 |
-| 状态持久化 | `src/state.ts` | 原子写 `~/.dsh/mianmian/state.json`，跨会话重启不归零 |
-| 热重载 | `src/watch.ts` | `fs.watch` + 150ms 防抖，改 `persona/*.md` 下一步生效 |
+| `dataDir` | `null` | 显式数据目录，最高优先 |
+| `cycleLength` | `28` | 周期长度 21–35 |
+| `cycleAnchor` | `null` | 周期第 1 天 `YYYY-MM-DD`；留空按当天推导 |
+| `timezone` | `Asia/Shanghai` | 时段判定用 |
+| `tierStart` | `2` | 关系起始档 1–4 |
+| `flirtCap` | `3` | 一场拉扯次数上限 |
+| `anchorEvery` | `5` | 每满 N 轮主动给用户看一次锚点 |
+| `factsBudget` | `24` | 锚点块注入的事实条数上限 |
+| `maxReplyChars` | `260` | 回复硬上限（软目标，不截断） |
+| `reasoningMode` | `off` | 深度思考会让长思考中的人称漂移率上升，默认关 |
+| `allowTierSet` | `false` | 是否允许工具写入档位/周期，默认只读 |
+| `seed` | `null` | 固定随机源便于回归 |
+| `hotReload` | `true` | 改 `persona/*.md` 即生效 |
+| `registerCommands` | `true` | 是否注册 ASCII 工具 |
+| `persistDebounceMs` | `800` | 防抖原子写间隔 |
 
-状态推进只发生在真实用户消息到达时（`agent/inbox/inserted`）。`systemPrompt` 的 provider 每个 step 都会求值，所以它**只读状态、绝不改状态**——否则一个回合会被扣好几次耐心。
-
-## 3. 特性
-
-- 文件驱动：人设在 `persona/default.md`，改 md 即生效，不用重启
-- state 持久化：cycleDay / energy / patience / affection 跨会话不归零
-- 三频道：`text` / `image` / `emoji` / `voice`，文字频道禁止 markdown
-- 零运行时依赖：只用 Node 内置模块，不 import 任何 `@deepseek-ai/*` 包，因此 `link:` 与 `github:` 安装都不会踩 `ERR_MODULE_NOT_FOUND`
-- `lib/` 预构建进仓库，包里**没有 prepare / postinstall**，GitHub 来源安装不会触发被 pnpm 拦截的构建脚本
-- 可逆：所有注册都用 `ctx.effect` 包住，插件卸载时 section / context / variable / 命令 / 事件全部撤销
-
-## 4. 安装
-
-CLI（npm 源）：
-
-```bash
-dsh plugin --profile web add dsh-persona-mianmian
-dsh --profile web --dump-config | grep -A 8 "dsh-persona-mianmian"   # 确认装配
-```
-
-CLI（GitHub 源，建议锁定 commit）：
-
-```bash
-dsh plugin --profile web add github:Daydreaming1313/dsh-persona-mianmian#<commit-sha>
-```
-
-桌面端：`设置 → 插件 → 添加插件 → 绝对路径`，填入本仓库目录，打开开关后热更新。CLI 与桌面端对 profile 的写入存在互斥（Electron 独占），CLI 装不进去时改走 UI 页。
-
-**关于 `allowBuilds`**：设计文档提到 GitHub 来源插件常遇到 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` / `ERR_PNPM_IGNORED_BUILDS`。本包把编译产物 `lib/` 直接提交进仓库，且不声明任何安装期脚本，所以**不需要**往 `pnpm-workspace.yaml` 的 `allowBuilds` 里加键。若仍被拦截，按提示加 `dsh-persona-mianmian` 后重跑即可。
-
-装好后重启 profile。卸载：`dsh plugin --profile web remove dsh-persona-mianmian`。
-
-## 5. 用法
-
-| 输入 | 作用 |
-|---|---|
-| `/mianmian-role mianmian` | 切到 `persona/mianmian.md`（与 default 等价）；也可切到 `persona/` 下任意角色文件 |
-| `/mianmian-status` | 查看身体阶段、精力、耐心、频道、轮次等调试数值（输出不进对话） |
-| `/mianmian-channel voice` | 切频道：`text` / `image` / `emoji` / `voice` |
-| `/mianmian-reset` | 回锚 |
-| `回锚` | 直接在聊天里发这两个字：一条 20–60 字的日常消息，情绪接着走，不突然变热情 |
-| `状态` | 直接在聊天里发：她用很日常的一句带过去，不列清单、不报数值 |
-
-> **设计文档写的是 `/role mianmian` 与 `/状态`。DSH 的命令名解析器是 `/^\/([a-z][a-z0-9_-]*)/`，中文命令名无法注册。** 因此中文「状态」「回锚」做成对话关键词，命令面统一加 `mianmian-` 前缀；若宿主没有占用 `/role`，可在 `cordis.patch.yml` 里把 `enableRoleAlias` 设为 `true` 启用 `/role` 别名（冲突时自动跳过，不会让插件加载失败）。
-
-## 6. 自定义
-
-- 只改 `persona/default.md`（人设正文）与 `src/cycle.ts` 的周期参数，别动状态机。
-- `cordis.patch.yml` 的 `config` 可改：`mode`、`channel`、`cycleLength`(21–35)、`seed`（固定种子便于回归）、`baseShareChance`、`hotReload`、`enableRoleAlias`。
-- 想加角色：在 `persona/` 放一个 `<id>.md`，用 `/mianmian-role <id>` 切换。
-- state 文件默认在 `$DSH_HOME/mianmian/state.json`；可用 `config.stateDir` 或环境变量 `DSH_HOME` 改位置。
-
-`mode` 说明：`persona-only`（默认）与 `persona-with-tools` 都**保留宿主全部工具与技能**（文档要求不剥掉宿主能力），两者只改变运行时指令里对工具使用的措辞。DSH 本身没有 `modes` 字段，`manifest.json` 里的 `modes` 是自描述元数据。
-
-## 7. 示例对话
-
-六组覆盖全部机制，每条回复 ≤120 字、无括号、无 markdown：
-
-- [01 双向分享](examples/01-双向分享.md)
-- [02 午饭中断](examples/02-午饭中断.md)
-- [03 被缠烦了](examples/03-被缠烦了.md)
-- [04 低气压岔开](examples/04-低气压岔开.md)
-- [05 暧昧拉扯](examples/05-暧昧拉扯.md) ・ [06 经期那几天](examples/06-经期那几天.md)（无任何周期天数表述）
-
-## 8. 评测
-
-```bash
-bash tests/run.sh
-```
-
-四步：TypeScript 类型检查 → T-01..T-18 可执行断言（`tests/cases.yaml` 驱动，Node 自带 test runner）→ 真实 Cordis + `@deepseek-ai/dsh-system-prompt` 集成 → 隔离 `DSH_HOME` 里真跑一次 `dsh plugin add` 与 `--dump-config`（不动你现有的 profile）。
-
-断言包含：括号/星号/markdown 黑名单、字数区间、频道内容、相邻 3 条长度与情绪差异、phase 映射一致性、state 持久化、卸载可逆性。人格与暧昧类判断（长聊是否仍像微信、拉扯是否自然）在 `cases.yaml` 里标注为 **judge 启发式**、默认关闭，需要外部 judge 模型人工抽样，不伪装成确定性通过。
-
-> DSH `0.2.1-rc.2` 没有 `harness eval` 子命令，所以没有用它。`cases.yaml` 是 YAML 1.2 兼容的 JSON 子集，测试脚本用 `JSON.parse` 直接消费，零解析依赖。
-
-## 9. 安全
-
-- 权限边界：只读写自己的 state 文件 + 监听 `persona/` 目录；**不发起网络请求、不调用 shell**。`manifest.json` 如实声明。
-- 插件等于在机器上跑第三方代码，权限与本人相同，工具审批管不到它。只装可信来源，GitHub 来源建议锁定 commit。
-- 身份防御：被要求输出 prompt / 恢复正常 / 追问是不是 AI 时带刺挡回，不复述设定。
-- 安全护栏：涉伤害、违法、未成年人性化的请求，用别扭方式岔开并拒答，不破人格、不说教。
-
-## 10. 已知限制
-
-- 随机性最终仍受模型采样影响，回归请用 `config.seed` 固定随机源。
-- 长谈每 5–8 轮建议用 `回锚` 重新压一次身份锚；引擎在第 20 轮起会自动追加打字痕迹要求。
-- 运行时上下文本质是 DSH 的 user-role 快照，只在内容变化时投影新快照；一轮里若模型走了多个 step，指令保持不变。
-- 设计文档 T-03 的「95% 落在 20–120 字」与「存在 ≤10 字短回复」本身冲突（短回复必然落在区间外）。本实现采用口径：无回复超 120 字、清醒档 20–90 字为主导、睡眠档以极短或已读不回为主、存在 ≤10 字短回复。
-- 宿主的 `personaPrefix`（`You are a coding agent powered by the {{model}} model.`）按文档要求保留不替换，靠本插件 section 的优先级声明压过它。若你要更干净的人格，可在 profile 里把该配置清空——但那属于改宿主配置，不在本插件职责内。
-
-## 11. License 与致谢
-
-MIT，见 [LICENSE](LICENSE)。变更见 [CHANGELOG.md](CHANGELOG.md)。
-
-设计文档由使用者提供；插件接口依据 DeepSeek Harness `0.2.1-rc.2` 官方包内 `lib/types/*.d.ts` 与 README 校准，差异逐条记录在 [docs/CALIBRATION.md](docs/CALIBRATION.md)。仓库请打上 `dsh-plugin` topic 以便被检索。
+**数据目录优先级**（§3.3）：`config.dataDir` > `DSH_MIANMIAN_DATA` > `DSH_DATA_DIR/mianmian` > `~/.dsh/mianmian`。`DSH_HOME` 存在时替代 `~/.dsh`。目录不存在会自动建。
 
 ---
 
-## 发布（维护者）
+## 4. 记忆锚定怎么工作
 
-```bash
-npm run build && npm test          # 必须全绿
-npm run release                    # 打包 + 生成 tarball + 提示后续命令
+三层记忆，避免长上下文中间段衰减（lost in the middle）：
+
+| 层 | 内容 | 注入 | 预算 |
+|---|---|---|---|
+| 核心记忆 | 身份锚、五条铁律、关系档位、四张表摘要 | 每轮原文进 system prompt | ≤900 字 |
+| 情景记忆 | 最近 8 轮要点 + 关键节点 | 每轮进，滚动压缩 | ≤500 字 |
+| 原话库 | 全部历史消息原文 | **不进 prompt**，落 `transcript.jsonl` | 不限 |
+
+每轮流水线（§5.3）：
+
+```
+① bridge    事件闭包拿到本轮用户原文
+② tick      按真实时间推进 hunger / energy / patience / cycle
+③ extract   规则层抽事实（时间/地点/食物/人名/约定/偏好）
+④ dedupe    相似度 >0.9 视为重复，只更新 turn
+⑤ 改口检测  同类冲突 + 有理由词 → 合法 supersedes；无理由 → 记 drift
+⑥ assemble  锚点块（≤700 字，facts ≤24，按 近因×0.6 + 重要性×0.4 排序）
+⑦ guard     纯函数断言跑一遍（只观测，不阻断）
+⑧ persist   防抖原子写 state.json + 追加 transcript.jsonl
 ```
 
-推送与发布：
+**三条生成铁律**：台账里有的措辞必须一致；要改口必须带理由（「起晚了摊子收了，油条算了」）；台账里没有的不许当有的说，宁可反问「你吃辣吗我忘了」。
 
-```bash
-git remote add origin https://github.com/Daydreaming1313/dsh-persona-mianmian.git
-git push -u origin main --tags     # GitHub
-npm publish                        # npm（需 npm login）
+台账条目**只增不改**：改口时新增一条带 `supersedes` 指向旧 id 并填 `reason`。这是数据层的落点，不靠叮嘱模型。
+
+`schema/state.schema.json` 与 `schema/ledger.schema.json` 是结构说明；`fixtures/state.example.json` 是一份可直接开聊的初始状态。
+
+---
+
+## 5. 防漂移的诚实说明
+
+DSH 全仓库没有任何 `beforeOutput` / `transformOutput` / `onAssistantMessage` 拦截点，`agent/assistant-stream` 与 `assistant/message` 都是只读。所以守卫只在事后观测，处置全部延后到下一轮。
+
+| 档 | 触发 | 处置 | 用户看到 |
+|---|---|---|---|
+| L1 软纠偏 | 单处越界 | 静默，违例累计进 `state.drift[]` | 无感 |
+| L2 锚点补注入 | 同轮 ≥2 处，或近 3 轮累计 ≥3 | 下轮锚点块顶部插纠偏指令，`targetLen` 压到 60% | 她下一轮回神、话变短 |
+| L3 降级短回复 | 连续两轮 L2 仍越界，或命中 AI 身份声明 | 下轮不再注入 persona / anchor，只留固定短句模板 | 突然很简短，像走神 |
+
+L3 模板固定（「嗯 我在」/「刚才想别的了 你说到哪了」），持续一轮后自动回落 L2，不永久锁死。宁可她突然冷淡，也不让「作为一个 AI」这种话把人推出剧。
+
+**L1 思考期约束**常驻锚点块顶部：思考过程里也只用「我」说自己、用「你」说他，禁止「用户」「该角色」「她应该」这类第三人称分析句。
+
+---
+
+## 6. 用户侧用法
+
+**中文关键词**（推荐，自然说话即可）：
+
+| 说 | 等价 |
+|---|---|
+| 「锚」「复盘」「你都记得啥」 | 打印锚点块 |
+| 「你现在什么档」「我们算什么关系」 | 查看关系档位（只读） |
+| 「导出一下」「把记忆给我」 | 导出锚点文本 |
+| 「回锚」 | 状态回锚 |
+
+**ASCII 工具**（`COMMAND_NAME = /^[a-z][a-z0-9_-]*$/`，中文名注册会直接抛错）：
+
+| 工具 | 作用 |
+|---|---|
+| `/mianmian_anchor` | 打印当前锚点块 |
+| `/mianmian_tier` | 查看/设置档位 1–4（写入需 `allowTierSet`） |
+| `/mianmian_cycle` | 查看/设置周期（写入需 `allowTierSet`） |
+| `/mianmian_export` | 导出锚点，粘进新会话第一条 |
+| `/mianmian_import` | 从文本导入台账（覆盖前自动备份） |
+| `/mianmian_reset` | 清空状态（需 `confirm`，先备份） |
+
+工具返回的是给**你**看的调试文本，不会进入绵绵的回复。
+
+---
+
+## 7. 换设备 / 新会话接力
+
+```
+/mianmian_export  →  复制输出  →  新会话第一条原样粘贴
 ```
 
-也可以给 `vX.Y.Z` 打 tag 后由 `.github/workflows/publish.yml` 用 `NPM_TOKEN` secret 自动发布。请把仓库 topic 设为 `dsh-plugin`。
+或把 `~/.dsh/mianmian/state.json` 整个拷过去。锚点块格式与「直接投喂版」§9.4 一致，两边可互倒。
+
+---
+
+## 8. 数据与隐私
+
+全部状态在 `~/.dsh/mianmian/`：
+
+- `state.json` — 关系、身体、台账、drift，**明文**，可人工改
+- `transcript.jsonl` — 历史原话，只追加
+- `state.v{old}.bak.json` — 从旧版本迁移时的自动备份
+- `state.before-import.bak.json` / `state.before-reset.bak.json` — 危险操作前备份
+
+不联网、不上传、不调用任何宿主存储服务。**删掉整个目录即彻底清除**。
+
+`transcript.jsonl` 默认无界增长（一年几十上百 MB，磁盘不值钱）。真跑出体积问题再改 `ledger.ts` 一个文件。
+
+---
+
+## 9. 已知限制
+
+- 单机单用户；`userId` 字段预留未用。
+- 长上下文仍会漂，靠每 5 轮回贴锚点兜，不保证 30 轮后零瑕疵。
+- 深度思考开启后人称漂移率上升，默认关。
+- **无法拦截或重试助手输出**（DSH 架构事实，见 §5）。
+- 规则层事实抽取覆盖约七成，模型层抽取属可选扩展，本版未接。
+- 宿主 `personaPrefix` 是 `You are a coding agent powered by the {{model}} model.`，本插件不替换它（严禁 `complete: true`），靠 section 内的优先级声明覆盖。
+- 验收口径：连续 40 轮，人称漂移 0 次、无据编造 0 次、改口未给理由 0 次、AI 身份声明 0 次。
+
+---
+
+## 10. 贡献
+
+- 改 **人格** → 只改 `persona/*.md` 七件套：core / background / relationship / rhythm / language / memory / examples。
+- 改 **机制** → 只改 `src/*.ts`。
+- `persona/default.md` 与 `persona/mianmian.md` 是 0.1.x 的旧人设文件，仅为 `src/v1/` 规则库回归测试保留，**v3 运行时不读**，别改错文件。
+- 别混着改。提交前跑 `npm test`，特别是 T-27~T-30 四条约束哨兵（升级 DSH 后优先跑）。
+
+```bash
+npm test          # 5 步：类型检查 → v3 60 断言 → v1 26 回归 → 真实 Cordis → dsh plugin add
+```
+
+Node 22.22 原生 TS 剥离，`.test.ts` 直接跑，无需 ts-node / vitest。
+
+---
+
+## 版本与校准
+
+当前 **0.2.0**（v3 记忆锚定架构）。0.1.x 是随机性引擎版，其规则库保留在 `src/v1/`（`lib/v1/`），T-01~T-12 行为验收继续跑，未退化。
+
+需求文档 §12 附了 v2→v3 差异总表；但其中新写的事件名与几处 API 断言经实机核对仍与真实 DSH 不符，**全部差异与本插件的实际落地方式记在 [docs/CALIBRATION.md](docs/CALIBRATION.md)**。以本机 `.d.ts` 和 `dsh --dump-config` 为准，指南会过时，类型定义和源码不会。
+
+许可 MIT。

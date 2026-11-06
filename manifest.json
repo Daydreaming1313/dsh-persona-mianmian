@@ -1,25 +1,36 @@
 {
-  "schema": "dsh-persona-mianmian/manifest/v1",
+  "schema": "dsh-persona-mianmian/manifest/v3",
   "name": "dsh-persona-mianmian",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "entry": "./lib/index.js",
   "bundle": "./cordis.patch.yml",
+  "stateVersion": 3,
   "permissions": [
     "state:read",
     "state:write",
-    "fs:watch:persona"
+    "fs:watch:persona",
+    "transcript:append"
   ],
   "network": false,
   "shell": false,
-  "modes": [
-    "persona-only",
-    "persona-with-tools"
+  "eventSubscriptions": [
+    "agent/created",
+    "agent/inbox/inserted",
+    "session/event",
+    "agent/turn-stopping"
   ],
-  "defaultMode": "persona-only",
+  "tools": [
+    "mianmian_anchor",
+    "mianmian_tier",
+    "mianmian_cycle",
+    "mianmian_export",
+    "mianmian_import",
+    "mianmian_reset"
+  ],
   "verifiedAgainst": {
     "dsh": "0.2.1-rc.2",
     "node": "22.22.2",
     "cordis": "4.0.5"
   },
-  "note": "DSH 不读取本文件。真实安装由 package.json 的 dsh.bundle.patch 与 cordis.patch.yml 驱动；本文件是给人和审计脚本看的自描述清单。"
+  "note": "DSH 不读取本文件。真实安装由 package.json 的 dsh.bundle.patch 与 cordis.patch.yml 驱动；本文件是给人和审计脚本看的自描述清单。插件不能拦截或改写助手输出，防漂移只做「检测 + 下轮纠偏 + 降级」。"
 }
