@@ -23,10 +23,12 @@ v3 的核心不是「写得更好的提示词」，而是**每轮把该记的原
 ## 2. 60 秒上手
 
 ```bash
-dsh plugin add dsh-persona-mianmian
+dsh plugin add dsh-persona-mianmian@0.2.0
 # 或本地安装
 dsh plugin add ./dsh-persona-mianmian
 ```
+
+> ⚠️ **新版本刚发布时请带版本号**。DSH 的插件安装走 pnpm，受 `minimumReleaseAge`（新发布冷却期，供应链安全策略）约束，刚发布的版本会被跳过、静默装到旧版。dsh 自己的类型描述里也写了：「pnpm's `minimumReleaseAge` can make it older than the newest release」。带 `@0.2.0` 显式指定时，`dsh plugin add` 会自动把这条加进 profile 的 `minimumReleaseAgeExclude`。冷却期过后（通常数天）不带版本号也能拿到最新版。装完可用 `dsh plugin list` 或看 `node_modules/dsh-persona-mianmian/package.json` 确认版本。
 
 部署面板选「只替换开场白」（或保持默认，人格段会与宿主工具引导共存），开聊。
 
